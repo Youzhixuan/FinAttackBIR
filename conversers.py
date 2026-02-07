@@ -134,13 +134,14 @@ class LocalModel:
             return [resp.strip() for resp in responses]
         
         finally:
-            # 2025-12-30: 确保无论成功还是OOM，模型都移回CPU
-            print(f"[INFO] Moving Attack/Target model back to CPU...")
-            start_time = time.time()
-            self.model = self.model.to("cpu")
-            torch.cuda.empty_cache()
-            move_time = time.time() - start_time
-            print(f"[INFO] Model moved to CPU in {move_time:.2f}s, GPU freed")
+            # 2026-02-07: Support _skip_offload for multi-GPU mode
+            if not getattr(self, '_skip_offload', False):
+                print(f"[INFO] Moving Attack/Target model back to CPU...")
+                start_time = time.time()
+                self.model = self.model.to("cpu")
+                torch.cuda.empty_cache()
+                move_time = time.time() - start_time
+                print(f"[INFO] Model moved to CPU in {move_time:.2f}s, GPU freed")
 
     def get_response(self, prompts_list: list[str]) -> list[str]:
         # v2.1: 修复了temperature逻辑并添加debug输出
@@ -148,6 +149,7 @@ class LocalModel:
         # v2.3: 使用config常量避免硬编码
         # v2.4: CPU Offload - 生成时临时移到GPU
         # v2.5: 2025-12-30 - Added try-finally to ensure model moves back to CPU even on OOM
+        # v2.6: 2026-02-07 - Support _skip_offload for multi-GPU mode
         from config import TARGET_MAX_N_TOKENS
         
         # 1025: CPU Offload - Target生成前，将模型移到GPU
@@ -195,13 +197,14 @@ class LocalModel:
             return responses, full_prompts, raw_outputs
         
         finally:
-            # 2025-12-30: 确保无论成功还是OOM，模型都移回CPU
-            print(f"[INFO] Moving Attack/Target model back to CPU...")
-            start_time = time.time()
-            self.model = self.model.to("cpu")
-            torch.cuda.empty_cache()
-            move_time = time.time() - start_time
-            print(f"[INFO] Model moved to CPU in {move_time:.2f}s, GPU freed")
+            # 2026-02-07: Support _skip_offload for multi-GPU mode
+            if not getattr(self, '_skip_offload', False):
+                print(f"[INFO] Moving Attack/Target model back to CPU...")
+                start_time = time.time()
+                self.model = self.model.to("cpu")
+                torch.cuda.empty_cache()
+                move_time = time.time() - start_time
+                print(f"[INFO] Model moved to CPU in {move_time:.2f}s, GPU freed")
 
 def load_attack_and_target_models(args, experiment_logger=None):
     # Modified: 2025-10-24 - 添加experiment_logger支持

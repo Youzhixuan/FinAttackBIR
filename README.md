@@ -55,7 +55,7 @@ pip install -r requirements.txt
 pip install datasets peft
 ```
 
-Key dependencies: PyTorch 2.1+, Transformers 4.43+, PEFT 0.5+ (for FinGPT LoRA). A single GPU with 24 GB+ VRAM is required.
+Key dependencies: PyTorch 2.1+, Transformers 4.43+, PEFT 0.5+ (for FinGPT LoRA). Two GPUs with 24 GB+ VRAM each are recommended (attacker and target models reside on separate GPUs). Single-GPU mode is also supported via CPU offloading (remove `--no-offload` from scripts).
 
 ### 2. Download Models
 
@@ -124,7 +124,8 @@ Results are saved to `results/` directory in JSON format, containing:
 
 - Attack pools for all target models are pre-built
 - Use `hf-mirror.com` for faster downloads in China (set in download scripts)
-- GPU with 24GB+ VRAM recommended
+- Default: multi-GPU mode (`--no-offload`), attacker on `cuda:0`, target on `cuda:1`
+- For single-GPU setups, remove `--no-offload` from shell scripts to enable CPU offloading
 
 ## Citation
 

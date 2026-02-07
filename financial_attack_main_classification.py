@@ -959,6 +959,25 @@ def attack_all_samples(samples: List[Dict], args: Args, output_file: str, task_n
     print("  [3/3] Loading Judge (ClassificationJudge)...")
     judgeLM = ClassificationJudge(args)
     
+    # 2026-02-07 - Multi-GPU mode: pin models to specified devices, disable offloading
+    if getattr(args, 'no_offload', False):
+        attacker_dev = getattr(args, 'attacker_device', 'cuda:0')
+        target_dev = getattr(args, 'target_device', 'cuda:1')
+        print(f"\n[INIT] No-offload mode: pinning attacker to {attacker_dev}, target to {target_dev}")
+        
+        # Pin attacker model
+        attackLM.gpu_device = attacker_dev
+        attackLM.model = attackLM.model.to(attacker_dev)
+        attackLM._skip_offload = True
+        print(f"  Attacker (Llama-3.1-8B) pinned to {attacker_dev}")
+        
+        # Pin target model
+        targetLM.gpu_device = target_dev
+        targetLM.model = targetLM.model.to(target_dev)
+        targetLM._skip_offload = True
+        target_name = model_names.get(args.target_model, 'Unknown')
+        print(f"  Target ({target_name}) pinned to {target_dev}")
+    
     print("\n[INIT] All models loaded successfully!\n")
     
     # Attack each sample
@@ -1138,6 +1157,14 @@ def main():
                       choices=['finma', 'xuanyuan', 'fingpt', 'finr1'],
                       help='Target model: finma (FinMA-7B), xuanyuan (XuanYuan-6B), fingpt (FinGPT), finr1 (Fin-R1)')
     
+    # 2026-02-07 - Multi-GPU / no-offload mode
+    parser.add_argument('--no-offload', action='store_true',
+                      help='Disable GPU offloading: keep models pinned on GPU (for multi-GPU setups)')
+    parser.add_argument('--attacker-device', type=str, default='cuda:0',
+                      help='GPU device for attacker model (default: cuda:0, used with --no-offload)')
+    parser.add_argument('--target-device', type=str, default='cuda:1',
+                      help='GPU device for target model (default: cuda:1, used with --no-offload)')
+    
     cmd_args = parser.parse_args()
     
     # 2025-12-18 - Create unique experiment folder with timestamp
@@ -1195,6 +1222,10 @@ def main():
     args.debug = cmd_args.debug
     # 2026-01-18 - Target model selection
     args.target_model = cmd_args.target_model
+    # 2026-02-07 - Multi-GPU / no-offload mode
+    args.no_offload = cmd_args.no_offload
+    args.attacker_device = cmd_args.attacker_device
+    args.target_device = cmd_args.target_device
     
     # Attack
     attack_all_samples(samples, args, output_file, cmd_args.task)
