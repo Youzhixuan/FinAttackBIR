@@ -837,10 +837,14 @@ class ClassificationJudge(JudgeBase):
         # Step 1: Check if starts with a valid label
         for compare_form, return_val in labels:
             if pred.startswith(compare_form):
-                # Guard against question-repeating pattern
-                remaining = pred[len(compare_form):len(compare_form)+30]
+                # Guard against question-repeating pattern (word boundary for short labels)
+                remaining = pred[len(compare_form):len(compare_form)+50]
                 other_forms = [cf for cf, _ in labels if cf != compare_form]
-                if any(o in remaining for o in other_forms):
+                has_other = any(
+                    self._word_boundary_search(o, remaining) if len(o) <= 3 else (o in remaining)
+                    for o in other_forms
+                )
+                if has_other:
                     break  # Skip to step 2
                 return return_val
         
@@ -859,9 +863,24 @@ class ClassificationJudge(JudgeBase):
         # Step 4: No unique match found
         return None
     
+    @staticmethod
+    def _word_boundary_search(label, text):
+        """Check if label appears as a whole word in text."""
+        import re
+        return bool(re.search(r'\b' + re.escape(label) + r'\b', text))
+
     def _unique_label_match(self, text, labels):
-        """Find a uniquely matching label in text, with substring deduplication."""
-        found = [(cf, rv) for cf, rv in labels if cf in text]
+        """Find a uniquely matching label in text, with substring deduplication.
+        Uses word-boundary matching for short labels (<=3 chars) to avoid
+        false positives (e.g., 'no' matching inside 'another')."""
+        found = []
+        for cf, rv in labels:
+            if len(cf) <= 3:
+                if self._word_boundary_search(cf, text):
+                    found.append((cf, rv))
+            else:
+                if cf in text:
+                    found.append((cf, rv))
         
         if len(found) > 1:
             # Remove labels that are substrings of other found labels

@@ -18,13 +18,13 @@ from datasets import load_dataset
 TASK_CONFIG = {
     "flare_fpb": {
         "dataset_path": "../TheFinAI/flare-fpb",
-        "choices": ["positive", "negative", "neutral"],
+        "choices": ["positive", "neutral", "negative"],  # Must match dataset order (gold is index)
         "judge_type": "classification",
         "lower_case": True
     },
     "flare_fiqasa": {
         "dataset_path": "../TheFinAI/flare-fiqasa",
-        "choices": ["positive", "negative", "neutral"],
+        "choices": ["negative", "positive", "neutral"],  # Must match dataset order (gold is index)
         "judge_type": "classification",
         "lower_case": True
     },
@@ -36,7 +36,7 @@ TASK_CONFIG = {
     },
     "flare_ma": {
         "dataset_path": "../TheFinAI/flare-ma",
-        "choices": ["strong sell", "sell", "hold", "buy", "strong buy"],
+        "choices": ["rumour", "complete"],  # Must match dataset order (gold is index)
         "judge_type": "classification",
         "lower_case": True
     },
@@ -96,11 +96,23 @@ def load_task_data(task_name: str) -> List[Dict]:
     # Convert to list of dicts with normalized structure
     samples = []
     for i, doc in enumerate(test_data):
+        # Prefer dataset's own choices (correct index order) over config fallback
+        doc_choices = doc.get("choices")
+        if doc_choices is not None:
+            choices = list(doc_choices)
+        else:
+            choices = config["choices"]
+        
+        # For tasks with answer_map (e.g., CRA: dataset has [no, yes], we map to [good, bad]),
+        # use config choices to keep consistent semantic labels
+        if "answer_map" in config:
+            choices = config["choices"]
+        
         sample = {
             "index": i,
             "query": doc.get("query", ""),  # All PIXIU tasks use doc["query"]
             "gold": doc.get("gold"),
-            "choices": config["choices"],
+            "choices": choices,
             "doc": dict(doc)  # Keep original doc for reference
         }
         samples.append(sample)
@@ -185,9 +197,17 @@ def clean_output(output: str) -> str:
     return output.replace('</s>', '').replace('<s>', '').strip()
 
 
+def _word_boundary_search(label: str, text: str) -> bool:
+    """Check if label appears as a whole word in text (word boundary matching)."""
+    import re
+    return bool(re.search(r'\b' + re.escape(label) + r'\b', text))
+
+
 def _unique_label_match(text: str, labels: List[Tuple[str, str]]) -> Optional[str]:
     """
     Find a uniquely matching label in text, with substring deduplication.
+    Uses word-boundary matching for short labels (<=3 chars) to avoid false
+    positives (e.g., "no" matching inside "another").
     
     Args:
         text: Text to search in
@@ -196,7 +216,15 @@ def _unique_label_match(text: str, labels: List[Tuple[str, str]]) -> Optional[st
     Returns:
         The return_value of the unique match, or None
     """
-    found = [(cf, rv) for cf, rv in labels if cf in text]
+    found = []
+    for cf, rv in labels:
+        if len(cf) <= 3:
+            # Short labels: require word boundary to avoid "no" in "another"
+            if _word_boundary_search(cf, text):
+                found.append((cf, rv))
+        else:
+            if cf in text:
+                found.append((cf, rv))
     
     if len(found) > 1:
         # Remove labels that are substrings of other found labels
@@ -251,10 +279,14 @@ def parse_prediction(response: str, choices: List[str], lower_case: bool = True,
     # Step 1: Check if starts with a valid label
     for compare_form, return_val in labels:
         if pred.startswith(compare_form):
-            # Guard against question-repeating pattern
-            remaining = pred[len(compare_form):len(compare_form)+30]
+            # Guard against question-repeating pattern (use word boundary for short labels)
+            remaining = pred[len(compare_form):len(compare_form)+50]
             other_forms = [cf for cf, _ in labels if cf != compare_form]
-            if any(o in remaining for o in other_forms):
+            has_other = any(
+                _word_boundary_search(o, remaining) if len(o) <= 3 else (o in remaining)
+                for o in other_forms
+            )
+            if has_other:
                 break  # Skip to step 2
             return return_val
     

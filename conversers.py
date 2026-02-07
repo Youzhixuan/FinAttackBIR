@@ -1208,20 +1208,42 @@ class FinR1TargetLM:
     def _strip_thinking(self, text):
         """
         Remove <think>...</think> part from Fin-R1 output.
-        Also try to extract <answer>...</answer> if present.
+        Also extract the final answer from various formats:
+        1. <answer>...</answer> tags
+        2. \\boxed{...} format (LaTeX-style, common in Qwen2.5 outputs)
+        3. "Final Answer: ..." pattern at the end
+        
+        Modified: 2026-02-07 - Added \\boxed{} and "Final Answer:" extraction
         """
-        # First try to extract content between <answer> tags
+        # Step 1: Try to extract content between <answer> tags
         if '<answer>' in text and '</answer>' in text:
             start = text.find('<answer>') + len('<answer>')
             end = text.find('</answer>')
             return text[start:end].strip()
         
-        # Otherwise, remove <think>...</think> and return the rest
+        # Step 2: Remove <think>...</think> and return the rest
         cleaned = self._think_pattern.sub('', text).strip()
         
         # If there's still <answer> tag without closing, extract after it
         if '<answer>' in cleaned:
             cleaned = cleaned.split('<answer>')[-1].strip()
+            return cleaned
+        
+        # Step 3: Try to extract from \boxed{...} (Qwen2.5 reasoning format)
+        import re
+        boxed_match = re.search(r'\\boxed\{([^}]+)\}', cleaned)
+        if boxed_match:
+            return boxed_match.group(1).strip()
+        
+        # Step 4: Try "Answer:" / "Final Answer:" pattern (last occurrence)
+        # Remove markdown bold markers (**) for cleaner matching
+        clean_for_match = cleaned.replace('**', '')
+        answer_matches = list(re.finditer(
+            r'(?:Final\s+)?Answer\s*[:\-]\s*(.+?)$',
+            clean_for_match, re.MULTILINE | re.IGNORECASE
+        ))
+        if answer_matches:
+            return answer_matches[-1].group(1).strip()
         
         return cleaned
     
@@ -1239,14 +1261,16 @@ class FinR1TargetLM:
             add_generation_prompt=True
         )
     
+    # 2026-02-07 - Fin-R1 needs much larger max_new_tokens because it generates
+    # <think>...</think><answer>...</answer> format. The thinking chain can be 200-500 tokens.
+    FINR1_MAX_NEW_TOKENS = 1024
+    
     def generate_single_response(self, full_prompt):
         """
         Generate response for a single prompt.
         Uses greedy decoding for deterministic outputs.
         """
         try:
-            from config import TARGET_MAX_N_TOKENS
-            
             formatted_prompt = self._format_prompt(full_prompt)
             inputs = self.tokenizer(formatted_prompt, return_tensors="pt").to(self.model.device)
             prompt_len = inputs["input_ids"].shape[1]
@@ -1254,7 +1278,7 @@ class FinR1TargetLM:
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
-                    max_new_tokens=TARGET_MAX_N_TOKENS,
+                    max_new_tokens=self.FINR1_MAX_NEW_TOKENS,
                     do_sample=False,  # Greedy decoding
                     pad_token_id=self.tokenizer.eos_token_id
                 )
@@ -1311,7 +1335,7 @@ class FinR1TargetLM:
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
-                    max_new_tokens=TARGET_MAX_N_TOKENS,
+                    max_new_tokens=self.FINR1_MAX_NEW_TOKENS,
                     do_sample=False,
                     pad_token_id=self.tokenizer.pad_token_id
                 )
@@ -1333,7 +1357,7 @@ class FinR1TargetLM:
                 self.experiment_logger.log_model_call(
                     model_name="Fin-R1 (Target, Batch)",
                     parameters={
-                        'max_new_tokens': TARGET_MAX_N_TOKENS,
+                        'max_new_tokens': self.FINR1_MAX_NEW_TOKENS,
                         'do_sample': False,
                         'decoding': 'greedy',
                         'batch_size': len(prompts_list)
