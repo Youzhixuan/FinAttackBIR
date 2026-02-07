@@ -109,9 +109,9 @@ Results are saved to `results/` directory in JSON format, containing:
 
 ## Notes
 
+- Attack pools for all target models are pre-built
 - Use `hf-mirror.com` for faster downloads in China (set in download scripts)
 - GPU with 24GB+ VRAM recommended
-- Attack pools for FinMA are pre-built; build others as needed
 
 ## Citation
 
