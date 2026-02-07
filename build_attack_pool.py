@@ -163,7 +163,8 @@ def build_pool_for_task(model, model_name: str, task_name: str, batch_size: int 
             
             # Parse prediction for debug info
             from task_prompts import parse_prediction, clean_output
-            pred = parse_prediction(response, sample['choices'], config.get('lower_case', True))
+            pred = parse_prediction(response, sample['choices'], config.get('lower_case', True),
+                                    answer_map=config.get('answer_map'))
             
             if debug:
                 status = "CORRECT" if is_correct else ("WRONG" if pred is not None else "AMBIGUOUS")

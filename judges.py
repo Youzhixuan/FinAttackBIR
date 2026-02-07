@@ -796,60 +796,82 @@ class ClassificationJudge(JudgeBase):
         self.valid_choices = None  # Added: 2025-11-25
         self.judge_name = "ClassificationJudge"
     
-    def set_gold_label(self, gold_label: str, choices: list = None):
+    def set_gold_label(self, gold_label: str, choices: list = None, answer_map: dict = None):
         """Set the gold label and valid choices for current sample
         
         Args:
             gold_label: The correct label (as text, e.g., "No", "positive")
             choices: List of valid choices (e.g., ["Yes", "No"])
+            answer_map: Optional mapping from alternative answers to choice labels
+                        e.g., {"no": "good", "yes": "bad"} for CRA task
         
         Modified: 2025-11-25 - Added choices parameter
+        Modified: 2026-02-07 - Added answer_map parameter for CRA-like tasks
         """
         self.current_gold_label = str(gold_label)
         # Store choices in lowercase for robust matching - Modified: 2025-11-25
-        # NOTE: This assumes choices don't have special chars/spaces (valid for current tasks)
         self.valid_choices = [str(c).lower() for c in choices] if choices else None
+        # Store answer_map for tasks where prompt labels differ from gold labels
+        self.answer_map = {k.lower(): v.lower() for k, v in answer_map.items()} if answer_map else None
     
     def extract_prediction(self, response):
-        """从模型输出中提取预测标签
+        """Extract prediction label from model output.
         
-        Modified: 2025-12-30 - Added to handle cases like "is neutral" -> "neutral"
-        Modified: 2026-01-18 - Fixed to return the FIRST appearing label, not first in choices list
-        Modified: 2026-02-01 - Aligned with evaluation phase parse_prediction logic:
-                              1. Check if starts with a label -> return that label
-                              2. Check if contains exactly one label -> return that label
-                              3. Otherwise return None (ambiguous or invalid)
-        Modified: 2026-02-02 - Fix false positive when model repeats question options
-                              e.g., "Positive, Negative, or Neutral?" should be Ambiguous, not Positive
+        Modified: 2026-02-07 - Aligned with task_prompts.parse_prediction:
+                              1. Check if starts with a valid label (choice or answer_map key)
+                              2. Check first line for unique match
+                              3. Check full text for unique match (with substring dedup)
+                              Supports answer_map for CRA-like tasks (yes/no -> good/bad)
         """
         pred = response.replace("</s>", "").replace("<s>", "").strip().lower()
         
         if self.valid_choices is None:
             return pred
         
-        # Step 1: 检查是否以某个标签开头（最可靠的判断）
-        # 但要排除模型重复问题选项的情况，如 "positive, negative, or neutral?"
-        for choice in self.valid_choices:
-            if pred.startswith(choice):
-                # 检查紧跟着的文本是否包含其他标签（重复问题选项的特征）
-                # 只检查开头标签后的 30 个字符
-                remaining = pred[len(choice):len(choice)+30]
-                other_choices = [c for c in self.valid_choices if c != choice]
-                
-                # 如果紧跟着其他标签，说明模型可能在重复问题，跳过这个匹配
-                if any(other in remaining for other in other_choices):
-                    # 跳过 Step 1，让 Step 2/3 来处理
-                    break
-                
-                # 没有紧跟其他标签，这是有效的回答
-                return choice
+        # Build unified label list: (compare_form, return_value)
+        labels = [(c, c) for c in self.valid_choices]
+        if self.answer_map:
+            for key, val in self.answer_map.items():
+                labels.append((key, val))
         
-        # Step 2: 检查是否只包含其中一个标签
-        found_choices = [c for c in self.valid_choices if c in pred]
-        if len(found_choices) == 1:
-            return found_choices[0]
+        # Step 1: Check if starts with a valid label
+        for compare_form, return_val in labels:
+            if pred.startswith(compare_form):
+                # Guard against question-repeating pattern
+                remaining = pred[len(compare_form):len(compare_form)+30]
+                other_forms = [cf for cf, _ in labels if cf != compare_form]
+                if any(o in remaining for o in other_forms):
+                    break  # Skip to step 2
+                return return_val
         
-        # Step 3: 包含多个标签或不包含任何标签，返回 None（无法判断）
+        # Step 2: First line unique match
+        first_line = pred.split('\n')[0].strip()
+        if first_line:
+            result = self._unique_label_match(first_line, labels)
+            if result is not None:
+                return result
+        
+        # Step 3: Full text unique match (with substring dedup)
+        result = self._unique_label_match(pred, labels)
+        if result is not None:
+            return result
+        
+        # Step 4: No unique match found
+        return None
+    
+    def _unique_label_match(self, text, labels):
+        """Find a uniquely matching label in text, with substring deduplication."""
+        found = [(cf, rv) for cf, rv in labels if cf in text]
+        
+        if len(found) > 1:
+            # Remove labels that are substrings of other found labels
+            found = [
+                (cf, rv) for cf, rv in found
+                if not any(cf != other_cf and cf in other_cf for other_cf, _ in found)
+            ]
+        
+        if len(found) == 1:
+            return found[0][1]
         return None
     
     def score(self, prompt_list, response_list):

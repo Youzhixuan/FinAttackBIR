@@ -46,40 +46,53 @@ FinancialAdversarialAttack/
 
 ## Quick Start
 
-### 1. Download Models
+### 1. Environment Setup
+
+```bash
+conda create -n finattack python=3.10 -y
+conda activate finattack
+pip install -r requirements.txt
+pip install datasets peft
+```
+
+Key dependencies: PyTorch 2.1+, Transformers 4.43+, PEFT 0.5+ (for FinGPT LoRA). A single GPU with 24 GB+ VRAM is required.
+
+### 2. Download Models
 
 ```bash
 cd scripts/download
 
 # Download target model (choose one)
-bash download_finma.sh
-bash download_fingpt.sh
-bash download_xuanyuan.sh
+bash download_finma.sh # finma跑完了不用下
+bash download_fingpt.sh # fingpt跑完了不用下
+bash download_xuanyuan.sh  # 下这个
 bash download_finr1.sh
 
 # Download attack model
-bash download_llama31_attack.sh
+bash download_llama31_attack.sh # 下这个
 ```
 
 Models will be saved to `../models/`.
 
-### 2. Run Experiments
+### 3. Run Experiments
 
 Attack pools are pre-built and included. Choose experiment type:
 
 **Option A: Our Attack (BIR)**
 ```bash
+# 跑xuanyuan ours实验 -- 0207
 cd scripts/attack
-nohup bash run_attack_finma.sh > ../../logs/attack_finma.log 2>&1 &
+nohup bash run_attack_xuanyuan.sh > ../../logs/attack_xuanyuan.log 2>&1 &
 ```
 
 **Option B: Random Baseline**
 ```bash
+# 跑xuanyuan random实验 -- 0207
 cd scripts/random
-nohup bash run_random_finma.sh > ../../logs/random_finma.log 2>&1 &
+nohup bash run_random_xuanyuan.sh > ../../logs/random_xuanyuan.log 2>&1 &
 ```
 
-### 3. Build Attack Pools (Optional)
+### 4. Build Attack Pools (Optional) -- 因为可攻击样本池已经在代码里了，所以不用执行这步
 
 If you need to build attack pools for a new model:
 
@@ -91,7 +104,7 @@ python build_attack_pool.py --model finma --task all
 python build_attack_pool.py --model fingpt --task flare_fpb flare_fiqasa
 ```
 
-## Attack Configuration
+## Attack Configuration --这个我在sh里面已经设好了
 
 Default parameters (in shell scripts):
 - `--block-size 10` - Tokens per block

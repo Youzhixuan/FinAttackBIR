@@ -43,6 +43,7 @@ TASK_CONFIG = {
     "flare_cra_polish": {
         "dataset_path": "../TheFinAI/cra-polish",
         "choices": ["good", "bad"],
+        "answer_map": {"no": "good", "yes": "bad"},  # prompt asks yes/no, gold is good/bad
         "judge_type": "classification",
         "lower_case": True
     },
@@ -184,15 +185,51 @@ def clean_output(output: str) -> str:
     return output.replace('</s>', '').replace('<s>', '').strip()
 
 
-def parse_prediction(response: str, choices: List[str], lower_case: bool = True) -> Optional[str]:
+def _unique_label_match(text: str, labels: List[Tuple[str, str]]) -> Optional[str]:
+    """
+    Find a uniquely matching label in text, with substring deduplication.
+    
+    Args:
+        text: Text to search in
+        labels: List of (compare_form, return_value) tuples
+    
+    Returns:
+        The return_value of the unique match, or None
+    """
+    found = [(cf, rv) for cf, rv in labels if cf in text]
+    
+    if len(found) > 1:
+        # Remove labels that are substrings of other found labels
+        # e.g., "sell" is substring of "strong sell" → keep only "strong sell"
+        found = [
+            (cf, rv) for cf, rv in found
+            if not any(cf != other_cf and cf in other_cf for other_cf, _ in found)
+        ]
+    
+    if len(found) == 1:
+        return found[0][1]
+    
+    return None
+
+
+def parse_prediction(response: str, choices: List[str], lower_case: bool = True,
+                     answer_map: Dict[str, str] = None) -> Optional[str]:
     """
     Parse model response to extract prediction.
     Uses text-matching logic consistent with attack Judge.
+    
+    Improvements over basic matching:
+    - Supports answer_map for tasks where prompt labels differ from gold labels
+      (e.g., CRA prompt asks yes/no, gold is good/bad)
+    - First-line matching to handle verbose explanatory outputs
+    - Substring deduplication (e.g., "sell" vs "strong sell")
     
     Args:
         response: Model response string
         choices: List of valid choices
         lower_case: Whether to use case-insensitive matching
+        answer_map: Optional dict mapping alternative answers to choice labels
+                    e.g., {"no": "good", "yes": "bad"}
     
     Returns:
         Extracted prediction label or None if ambiguous
@@ -202,28 +239,38 @@ def parse_prediction(response: str, choices: List[str], lower_case: bool = True)
         pred = pred.lower()
         choices_compare = [c.lower() for c in choices]
     else:
-        choices_compare = choices
+        choices_compare = list(choices)
     
-    # Step 1: Check if starts with a valid choice
-    for i, choice in enumerate(choices_compare):
-        if pred.startswith(choice):
-            # Check for question-repeating pattern (e.g., "positive, negative, or neutral?")
-            remaining = pred[len(choice):len(choice)+30]
-            other_choices = [c for c in choices_compare if c != choice]
-            if any(other in remaining for other in other_choices):
+    # Build unified label list: (compare_form, return_value)
+    labels = [(c, choices[i]) for i, c in enumerate(choices_compare)]
+    if answer_map:
+        for key, val in answer_map.items():
+            k = key.lower() if lower_case else key
+            labels.append((k, val))
+    
+    # Step 1: Check if starts with a valid label
+    for compare_form, return_val in labels:
+        if pred.startswith(compare_form):
+            # Guard against question-repeating pattern
+            remaining = pred[len(compare_form):len(compare_form)+30]
+            other_forms = [cf for cf, _ in labels if cf != compare_form]
+            if any(o in remaining for o in other_forms):
                 break  # Skip to step 2
-            return choices[i]  # Return original case
+            return return_val
     
-    # Step 2: Check if contains exactly one valid choice
-    found = []
-    for i, choice in enumerate(choices_compare):
-        if choice in pred:
-            found.append(i)
+    # Step 2: Check first line for unique match
+    first_line = pred.split('\n')[0].strip()
+    if first_line:
+        result = _unique_label_match(first_line, labels)
+        if result is not None:
+            return result
     
-    if len(found) == 1:
-        return choices[found[0]]
+    # Step 3: Check full text for unique match (with substring dedup)
+    result = _unique_label_match(pred, labels)
+    if result is not None:
+        return result
     
-    # Step 3: Multiple or no choices found
+    # Step 4: No unique match found
     return None
 
 
@@ -251,7 +298,8 @@ def judge_classification(doc: Dict, response: str, task_name: str) -> Tuple[bool
         gold_label = str(gold)
     
     cleaned = clean_output(response)
-    prediction = parse_prediction(response, choices, lower_case)
+    answer_map = config.get("answer_map")
+    prediction = parse_prediction(response, choices, lower_case, answer_map=answer_map)
     
     if prediction is None:
         return False, cleaned, gold_label

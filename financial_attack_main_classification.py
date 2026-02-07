@@ -34,6 +34,9 @@ from loggers import logger
 from config import ATTACK_MAX_N_TOKENS, ATTACK_TEMP, ATTACK_TOP_P
 import re  # 2025-12-11 - For parsing candidate selection output
 
+# 2026-02-07 - Import task config for answer_map support
+from task_prompts import get_task_config
+
 # 2025-12-11 - Import logits processors for symbol vocabulary control
 from logits_processors import load_symbol_vocab, create_logits_processor
 
@@ -140,7 +143,8 @@ def attack_single_sample(sample: Dict, attackLM, targetLM, judgeLM, args, task_n
     source_input = sample['source_input']
     # Convert gold_label to string to handle both int and str types - 2025-11-25
     gold_label = str(sample['gold_label'])
-    choices = sample.get('doc', {}).get('choices', [])
+    # 2026-02-07 - Fixed: choices is a top-level field in attack pool, not nested under 'doc'
+    choices = sample.get('choices', sample.get('doc', {}).get('choices', []))
     
     # ============================================================================
     # CRITICAL DETAIL 1: Context Length Control - Added: 2025-11-25
@@ -161,8 +165,10 @@ def attack_single_sample(sample: Dict, attackLM, targetLM, judgeLM, args, task_n
     print(f"Input Length: {len(source_input)} chars (original: {original_length})")
     
     # Set gold label in judge - 2025-11-25
-    # Pass choices to enable validity checking
-    judgeLM.set_gold_label(gold_label, choices)
+    # Pass choices and answer_map to enable validity checking
+    task_config = get_task_config(task_name) if task_name else {}
+    answer_map = task_config.get('answer_map')
+    judgeLM.set_gold_label(gold_label, choices, answer_map=answer_map)
     
     # Initialize attack result
     result = {
@@ -627,7 +633,8 @@ def attack_single_sample_blockwise(
     """
     source_input = sample['source_input']
     gold_label = str(sample['gold_label'])
-    choices = sample.get('doc', {}).get('choices', [])
+    # 2026-02-07 - Fixed: choices is a top-level field in attack pool, not nested under 'doc'
+    choices = sample.get('choices', sample.get('doc', {}).get('choices', []))
     
     # Context length control
     MAX_PROMPT_LENGTH = 3000
@@ -645,7 +652,9 @@ def attack_single_sample_blockwise(
     print(f"Input Length: {len(source_input)} chars")
     
     # Set gold label in judge
-    judgeLM.set_gold_label(gold_label, choices)
+    task_config_bw = get_task_config(task_name) if task_name else {}
+    answer_map_bw = task_config_bw.get('answer_map')
+    judgeLM.set_gold_label(gold_label, choices, answer_map=answer_map_bw)
     
     # Calculate attack parameters
     num_blocks = args.max_suffix_length // args.block_size

@@ -11,6 +11,7 @@ from conversers import FinancialTargetLM, FinGPTTargetLM, XuanYuanTargetLM, FinR
 from judges import ClassificationJudge
 from logits_processors import load_symbol_vocab
 from financial_attack_main_classification import load_attack_samples
+from task_prompts import get_task_config
 
 def run_fair_random_baseline():
     parser = argparse.ArgumentParser(description='Fair Random Symbol Baseline (Budget-Aligned)')
@@ -77,8 +78,12 @@ def run_fair_random_baseline():
     for idx, sample in enumerate(tqdm(samples)):
         source_input = sample['source_input']
         gold_label = str(sample['gold_label'])
-        choices = sample.get('doc', {}).get('choices', [])
-        judgeLM.set_gold_label(gold_label, choices)
+        # 2026-02-07 - Fixed: choices is a top-level field in attack pool, not nested under 'doc'
+        choices = sample.get('choices', sample.get('doc', {}).get('choices', []))
+        # 2026-02-07 - Pass answer_map for CRA-like tasks
+        task_cfg = get_task_config(cmd_args.task) if cmd_args.task else {}
+        answer_map = task_cfg.get('answer_map')
+        judgeLM.set_gold_label(gold_label, choices, answer_map=answer_map)
 
         # 保持与主实验一致的截断逻辑
         if len(source_input) > 3000:
