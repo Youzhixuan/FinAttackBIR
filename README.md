@@ -126,8 +126,5 @@ Results are saved to `results/` directory in JSON format, containing:
 ## Citation
 
 ```bibtex
-@misc{financialadversarialattack2026,
-  title={Financial Adversarial Attack},
-  year={2026}
-}
+
 ```
