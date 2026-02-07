@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# 环境变量和敏感信息
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb
+
+# 日志文件
+*.log
+logs/
+
+# 结果和缓存
+result/
+results/
+.cache/
+*.cache
+
+# nohup 输出
+nohup.out
+*.out
+
+# 备份文件
+*.backup
+*.backup_*
+
+# 模型文件（太大不上传）
+*.bin
+*.safetensors
+*.gguf
+models/
+
+# 数据集原始文件（不上传）
+TheFinAI/
+FinTrust-main/
+
+# task_prompts 中引用的数据集路径
+../TheFinAI/
+../FinTrust-main/
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+*.bak

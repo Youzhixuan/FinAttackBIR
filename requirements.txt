@@ -1,0 +1,9 @@
+litellm==1.15.2     
+openai==2.3.0
+torch==2.1.2          
+transformers==4.43.4     
+fschat==0.2.23
+jsonlines==4.0.0         
+pandas==2.3.3
+tqdm==4.67.1
+wandb==0.22.2
