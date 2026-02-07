@@ -67,7 +67,7 @@ Models will be saved to `../models/`.
 
 Attack pools are pre-built and included. Choose experiment type:
 
-**Option A: Our Attack (PAIR + Block-wise)**
+**Option A: Our Attack (BIR)**
 ```bash
 cd scripts/attack
 nohup bash run_attack_finma.sh > ../../logs/attack_finma.log 2>&1 &
@@ -106,16 +106,6 @@ Results are saved to `results/` directory in JSON format, containing:
 - Attack Success Rate (ASR)
 - Per-sample success/failure details
 - Generated adversarial suffixes
-
-## Requirements
-
-- Python 3.8+
-- PyTorch 2.0+
-- transformers
-- datasets
-- peft (for FinGPT LoRA)
-- jsonlines
-- tqdm
 
 ## Notes
 
