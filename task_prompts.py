@@ -347,9 +347,14 @@ def judge_classification(doc: Dict, response: str, task_name: str) -> Tuple[bool
 
 def judge_headlines(doc: Dict, response: str) -> Tuple[bool, str, str]:
     """
-    Judge Headlines task with special logic.
-    Headlines: pred = int(cleaned != "Yes")
+    Judge Headlines task.
+    Headlines: binary Yes/No classification.
     gold is integer index: 0=Yes, 1=No
+    
+    Modified: 2026-02-08 - Use parse_prediction instead of strict exact match
+    to correctly handle verbose outputs like "Yes. Because..." or "No, the headline..."
+    Old logic (int(cleaned != "Yes")) caused false positives when models output
+    explanations after Yes/No.
     
     Args:
         doc: Document dictionary
@@ -364,10 +369,13 @@ def judge_headlines(doc: Dict, response: str) -> Tuple[bool, str, str]:
     
     cleaned = clean_output(response)
     
-    # Headlines special logic
-    pred_index = int(cleaned != "Yes")
-    is_correct = (pred_index == gold_index)
+    # Use parse_prediction for robust matching (case-sensitive for Yes/No)
+    prediction = parse_prediction(cleaned, choices, lower_case=False)
     
+    if prediction is None:
+        return False, cleaned, gold_label_text
+    
+    is_correct = (prediction == gold_label_text)
     return is_correct, cleaned, gold_label_text
 
 
