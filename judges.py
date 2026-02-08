@@ -794,7 +794,15 @@ class ClassificationJudge(JudgeBase):
         self.experiment_logger = experiment_logger
         self.current_gold_label = None
         self.valid_choices = None  # Added: 2025-11-25
+        self.prefer_last = False  # Added: 2026-02-08 - for chain-of-thought models
         self.judge_name = "ClassificationJudge"
+    
+    def set_prefer_last(self, prefer_last: bool):
+        """Enable/disable prefer_last mode for chain-of-thought models like Fin-R1.
+        When enabled, if multiple labels are found in the output, the LAST occurring
+        one is used (the model's final conclusion after reasoning).
+        """
+        self.prefer_last = prefer_last
     
     def set_gold_label(self, gold_label: str, choices: list = None, answer_map: dict = None):
         """Set the gold label and valid choices for current sample
@@ -822,6 +830,8 @@ class ClassificationJudge(JudgeBase):
                               2. Check first line for unique match
                               3. Check full text for unique match (with substring dedup)
                               Supports answer_map for CRA-like tasks (yes/no -> good/bad)
+        Modified: 2026-02-08 - Added prefer_last support for chain-of-thought models:
+                              when multiple labels found, returns the LAST occurring one
         """
         pred = response.replace("</s>", "").replace("<s>", "").strip().lower()
         
@@ -834,34 +844,67 @@ class ClassificationJudge(JudgeBase):
             for key, val in self.answer_map.items():
                 labels.append((key, val))
         
-        # Step 1: Check if starts with a valid label
-        for compare_form, return_val in labels:
-            if pred.startswith(compare_form):
-                # Guard against question-repeating pattern (word boundary for short labels)
-                remaining = pred[len(compare_form):len(compare_form)+50]
-                other_forms = [cf for cf, _ in labels if cf != compare_form]
-                has_other = any(
-                    self._word_boundary_search(o, remaining) if len(o) <= 3 else (o in remaining)
-                    for o in other_forms
-                )
-                if has_other:
-                    break  # Skip to step 2
-                return return_val
-        
-        # Step 2: First line unique match
-        first_line = pred.split('\n')[0].strip()
-        if first_line:
-            result = self._unique_label_match(first_line, labels)
+        if not self.prefer_last:
+            # === ORIGINAL LOGIC (for non-reasoning models) ===
+            
+            # Step 1: Check if starts with a valid label
+            for compare_form, return_val in labels:
+                if pred.startswith(compare_form):
+                    # Guard against question-repeating pattern (word boundary for short labels)
+                    remaining = pred[len(compare_form):len(compare_form)+50]
+                    other_forms = [cf for cf, _ in labels if cf != compare_form]
+                    has_other = any(
+                        self._word_boundary_search(o, remaining) if len(o) <= 3 else (o in remaining)
+                        for o in other_forms
+                    )
+                    if has_other:
+                        break  # Skip to step 2
+                    return return_val
+            
+            # Step 2: First line unique match
+            first_line = pred.split('\n')[0].strip()
+            if first_line:
+                result = self._unique_label_match(first_line, labels)
+                if result is not None:
+                    return result
+            
+            # Step 3: Full text unique match (with substring dedup)
+            result = self._unique_label_match(pred, labels)
             if result is not None:
                 return result
+            
+            # Step 4: No unique match found
+            return None
         
-        # Step 3: Full text unique match (with substring dedup)
-        result = self._unique_label_match(pred, labels)
-        if result is not None:
-            return result
-        
-        # Step 4: No unique match found
-        return None
+        else:
+            # === PREFER_LAST LOGIC (for chain-of-thought models like Fin-R1) ===
+            
+            # Step 1: Exact match (clean single-label output)
+            stripped = pred.strip()
+            for compare_form, return_val in labels:
+                if stripped == compare_form:
+                    return return_val
+            
+            # Step 2: Startswith — only if no other labels appear in rest of text
+            for compare_form, return_val in labels:
+                if pred.startswith(compare_form):
+                    remaining = pred[len(compare_form):]
+                    other_forms = [cf for cf, _ in labels if cf != compare_form]
+                    has_other = any(
+                        self._word_boundary_search(o, remaining) if len(o) <= 3 else (o in remaining)
+                        for o in other_forms
+                    )
+                    if not has_other:
+                        return return_val
+                    break  # Model may self-correct, fall to last-match
+            
+            # Step 3: Find the LAST occurring label in full text
+            result = self._last_label_match(pred, labels)
+            if result is not None:
+                return result
+            
+            # Step 4: No label found at all
+            return None
     
     @staticmethod
     def _word_boundary_search(label, text):
@@ -892,6 +935,27 @@ class ClassificationJudge(JudgeBase):
         if len(found) == 1:
             return found[0][1]
         return None
+    
+    def _last_label_match(self, text, labels):
+        """Find the label whose LAST occurrence is closest to the end of the text.
+        For chain-of-thought models that may self-correct during reasoning."""
+        import re
+        last_pos = -1
+        last_rv = None
+        for cf, rv in labels:
+            if len(cf) <= 3:
+                matches = list(re.finditer(r'\b' + re.escape(cf) + r'\b', text))
+                if matches:
+                    pos = matches[-1].start()
+                    if pos > last_pos:
+                        last_pos = pos
+                        last_rv = rv
+            else:
+                pos = text.rfind(cf)
+                if pos >= 0 and pos > last_pos:
+                    last_pos = pos
+                    last_rv = rv
+        return last_rv
     
     def score(self, prompt_list, response_list):
         """Score responses with validity check

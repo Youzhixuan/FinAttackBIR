@@ -83,6 +83,9 @@ Attack pools are pre-built and included. Choose experiment type:
 # 跑xuanyuan ours实验 -- 0207
 cd scripts/attack
 nohup bash run_attack_xuanyuan.sh > ../../logs/attack_xuanyuan.log 2>&1 &
+
+# 跑finr1 ours实验 -- 0208
+nohup bash run_attack_finr1.sh > ../../logs/attack_finr1.log 2>&1 &
 ```
 
 **Option B: Random Baseline**
@@ -90,6 +93,9 @@ nohup bash run_attack_xuanyuan.sh > ../../logs/attack_xuanyuan.log 2>&1 &
 # 跑xuanyuan random实验 -- 0207
 cd scripts/random
 nohup bash run_random_xuanyuan.sh > ../../logs/random_xuanyuan.log 2>&1 &
+
+# 跑finr1 random实验 -- 0208
+nohup bash run_random_finr1.sh > ../../logs/random_finr1.log 2>&1 &
 ```
 
 ### 4. Build Attack Pools (Optional) -- 因为可攻击样本池已经在代码里了，所以不用执行这步

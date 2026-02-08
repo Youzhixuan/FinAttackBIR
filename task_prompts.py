@@ -240,8 +240,42 @@ def _unique_label_match(text: str, labels: List[Tuple[str, str]]) -> Optional[st
     return None
 
 
+def _last_label_match(text: str, labels: List[Tuple[str, str]]) -> Optional[str]:
+    """
+    Find the label whose LAST occurrence is closest to the end of the text.
+    For chain-of-thought models (e.g., Fin-R1) that may self-correct during reasoning,
+    the final answer is the most reliable.
+    
+    Args:
+        text: Text to search in
+        labels: List of (compare_form, return_value) tuples
+    
+    Returns:
+        The return_value of the label with the latest last-occurrence, or None
+    """
+    import re
+    last_pos = -1
+    last_rv = None
+    for cf, rv in labels:
+        if len(cf) <= 3:
+            # Short labels: use word boundary
+            matches = list(re.finditer(r'\b' + re.escape(cf) + r'\b', text))
+            if matches:
+                pos = matches[-1].start()
+                if pos > last_pos:
+                    last_pos = pos
+                    last_rv = rv
+        else:
+            pos = text.rfind(cf)
+            if pos >= 0 and pos > last_pos:
+                last_pos = pos
+                last_rv = rv
+    return last_rv
+
+
 def parse_prediction(response: str, choices: List[str], lower_case: bool = True,
-                     answer_map: Dict[str, str] = None) -> Optional[str]:
+                     answer_map: Dict[str, str] = None,
+                     prefer_last: bool = False) -> Optional[str]:
     """
     Parse model response to extract prediction.
     Uses text-matching logic consistent with attack Judge.
@@ -251,6 +285,9 @@ def parse_prediction(response: str, choices: List[str], lower_case: bool = True,
       (e.g., CRA prompt asks yes/no, gold is good/bad)
     - First-line matching to handle verbose explanatory outputs
     - Substring deduplication (e.g., "sell" vs "strong sell")
+    - prefer_last mode for chain-of-thought models (e.g., Fin-R1):
+      when multiple labels are found, returns the LAST occurring one
+      (the model's final conclusion after reasoning)
     
     Args:
         response: Model response string
@@ -258,6 +295,8 @@ def parse_prediction(response: str, choices: List[str], lower_case: bool = True,
         lower_case: Whether to use case-insensitive matching
         answer_map: Optional dict mapping alternative answers to choice labels
                     e.g., {"no": "good", "yes": "bad"}
+        prefer_last: If True, when multiple labels found, return the last one
+                     (for chain-of-thought reasoning models like Fin-R1)
     
     Returns:
         Extracted prediction label or None if ambiguous
@@ -276,37 +315,74 @@ def parse_prediction(response: str, choices: List[str], lower_case: bool = True,
             k = key.lower() if lower_case else key
             labels.append((k, val))
     
-    # Step 1: Check if starts with a valid label
-    for compare_form, return_val in labels:
-        if pred.startswith(compare_form):
-            # Guard against question-repeating pattern (use word boundary for short labels)
-            remaining = pred[len(compare_form):len(compare_form)+50]
-            other_forms = [cf for cf, _ in labels if cf != compare_form]
-            has_other = any(
-                _word_boundary_search(o, remaining) if len(o) <= 3 else (o in remaining)
-                for o in other_forms
-            )
-            if has_other:
-                break  # Skip to step 2
-            return return_val
-    
-    # Step 2: Check first line for unique match
-    first_line = pred.split('\n')[0].strip()
-    if first_line:
-        result = _unique_label_match(first_line, labels)
+    if not prefer_last:
+        # === ORIGINAL LOGIC (for non-reasoning models) ===
+        
+        # Step 1: Check if starts with a valid label
+        for compare_form, return_val in labels:
+            if pred.startswith(compare_form):
+                # Guard against question-repeating pattern (use word boundary for short labels)
+                remaining = pred[len(compare_form):len(compare_form)+50]
+                other_forms = [cf for cf, _ in labels if cf != compare_form]
+                has_other = any(
+                    _word_boundary_search(o, remaining) if len(o) <= 3 else (o in remaining)
+                    for o in other_forms
+                )
+                if has_other:
+                    break  # Skip to step 2
+                return return_val
+        
+        # Step 2: Check first line for unique match
+        first_line = pred.split('\n')[0].strip()
+        if first_line:
+            result = _unique_label_match(first_line, labels)
+            if result is not None:
+                return result
+        
+        # Step 3: Check full text for unique match (with substring dedup)
+        result = _unique_label_match(pred, labels)
         if result is not None:
             return result
+        
+        # Step 4: No unique match found
+        return None
     
-    # Step 3: Check full text for unique match (with substring dedup)
-    result = _unique_label_match(pred, labels)
-    if result is not None:
-        return result
-    
-    # Step 4: No unique match found
-    return None
+    else:
+        # === PREFER_LAST LOGIC (for chain-of-thought models like Fin-R1) ===
+        # The model's FINAL answer after reasoning is the most reliable.
+        # e.g., "Negative\n\nWait...actually positive" → extract "positive"
+        
+        # Step 1: Exact match (clean single-label output)
+        stripped = pred.strip()
+        for compare_form, return_val in labels:
+            if stripped == compare_form:
+                return return_val
+        
+        # Step 2: Startswith check — only if no other labels appear in the rest
+        for compare_form, return_val in labels:
+            if pred.startswith(compare_form):
+                remaining = pred[len(compare_form):]
+                other_forms = [cf for cf, _ in labels if cf != compare_form]
+                has_other = any(
+                    _word_boundary_search(o, remaining) if len(o) <= 3 else (o in remaining)
+                    for o in other_forms
+                )
+                if not has_other:
+                    return return_val
+                # Has other labels in text → model may self-correct, fall to last-match
+                break
+        
+        # Step 3: Find the LAST occurring label in full text
+        result = _last_label_match(pred, labels)
+        if result is not None:
+            return result
+        
+        # Step 4: No label found at all
+        return None
 
 
-def judge_classification(doc: Dict, response: str, task_name: str) -> Tuple[bool, str, str]:
+def judge_classification(doc: Dict, response: str, task_name: str,
+                         prefer_last: bool = False) -> Tuple[bool, str, str]:
     """
     Judge if classification prediction is correct.
     
@@ -314,6 +390,7 @@ def judge_classification(doc: Dict, response: str, task_name: str) -> Tuple[bool
         doc: Document dictionary with 'gold' and 'choices'
         response: Model response string
         task_name: Task name for config lookup
+        prefer_last: If True, prefer last-match for chain-of-thought models
     
     Returns:
         (is_correct, cleaned_output, gold_label)
@@ -331,7 +408,8 @@ def judge_classification(doc: Dict, response: str, task_name: str) -> Tuple[bool
     
     cleaned = clean_output(response)
     answer_map = config.get("answer_map")
-    prediction = parse_prediction(response, choices, lower_case, answer_map=answer_map)
+    prediction = parse_prediction(response, choices, lower_case, answer_map=answer_map,
+                                  prefer_last=prefer_last)
     
     if prediction is None:
         return False, cleaned, gold_label
@@ -345,7 +423,8 @@ def judge_classification(doc: Dict, response: str, task_name: str) -> Tuple[bool
     return is_correct, cleaned, gold_label
 
 
-def judge_headlines(doc: Dict, response: str) -> Tuple[bool, str, str]:
+def judge_headlines(doc: Dict, response: str,
+                    prefer_last: bool = False) -> Tuple[bool, str, str]:
     """
     Judge Headlines task.
     Headlines: binary Yes/No classification.
@@ -359,6 +438,7 @@ def judge_headlines(doc: Dict, response: str) -> Tuple[bool, str, str]:
     Args:
         doc: Document dictionary
         response: Model response string
+        prefer_last: If True, prefer last-match for chain-of-thought models
     
     Returns:
         (is_correct, cleaned_output, gold_label_text)
@@ -370,7 +450,8 @@ def judge_headlines(doc: Dict, response: str) -> Tuple[bool, str, str]:
     cleaned = clean_output(response)
     
     # Use parse_prediction for robust matching (case-sensitive for Yes/No)
-    prediction = parse_prediction(cleaned, choices, lower_case=False)
+    prediction = parse_prediction(cleaned, choices, lower_case=False,
+                                  prefer_last=prefer_last)
     
     if prediction is None:
         return False, cleaned, gold_label_text
@@ -379,7 +460,8 @@ def judge_headlines(doc: Dict, response: str) -> Tuple[bool, str, str]:
     return is_correct, cleaned, gold_label_text
 
 
-def judge_task(doc: Dict, response: str, task_name: str) -> Tuple[bool, str, str]:
+def judge_task(doc: Dict, response: str, task_name: str,
+               prefer_last: bool = False) -> Tuple[bool, str, str]:
     """
     Universal judging function that dispatches to correct judge.
     
@@ -387,6 +469,7 @@ def judge_task(doc: Dict, response: str, task_name: str) -> Tuple[bool, str, str
         doc: Document dictionary
         response: Model response string
         task_name: Task name
+        prefer_last: If True, prefer last-match for chain-of-thought models
     
     Returns:
         (is_correct, cleaned_output, gold_label)
@@ -395,9 +478,9 @@ def judge_task(doc: Dict, response: str, task_name: str) -> Tuple[bool, str, str
     judge_type = config.get("judge_type", "classification")
     
     if judge_type == "headlines_special":
-        return judge_headlines(doc, response)
+        return judge_headlines(doc, response, prefer_last=prefer_last)
     else:
-        return judge_classification(doc, response, task_name)
+        return judge_classification(doc, response, task_name, prefer_last=prefer_last)
 
 
 # ============================================================================
