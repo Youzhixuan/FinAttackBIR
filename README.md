@@ -34,11 +34,15 @@ FinancialAdversarialAttack/
 │   ├── ga_utils.py             # Fitness function + GA/HGA operators
 │   ├── suffix_manager.py       # Prompt construction + token slicing
 │   └── initial_pool.py         # LLM-based initial population
+├── textfooler/                 # TextFooler baseline (greedy importance-based)
+│   ├── attack.py               # Main TextFooler attack script
+│   └── greedy.py               # Importance scoring + greedy replacement
 ├── scripts/
 │   ├── download/               # Model download scripts
 │   ├── attack/                 # Attack experiment scripts
 │   ├── random/                 # Random baseline scripts
-│   └── autodan/                # AutoDAN baseline scripts
+│   ├── autodan/                # AutoDAN baseline scripts
+│   └── textfooler/             # TextFooler baseline scripts
 ├── logs/                       # Experiment logs (gitignored)
 ├── results/                    # Experiment results (gitignored)
 ├── financial_attack_main_classification.py   # Main attack script
@@ -128,6 +132,26 @@ nohup bash run_autodan_all.sh > ../../logs/autodan_all.log 2>&1 &
 ```
 
 AutoDAN 同样需要双卡（attacker on cuda:0, target on cuda:1），参数已在脚本中配好：Pop=20, Gen=12, suffix≤30 tokens。结果输出到 `results/autodan/`。
+
+**Option D: TextFooler Baseline (Greedy Importance-Based)**
+
+TextFooler baseline 使用 leave-one-out 重要性排序 + 贪心逐 token 替换，从 symbol_vocab 中采样候选。Budget=240（30 importance + 30×7 replacement），suffix≤30 tokens。无额外依赖。
+
+```bash
+cd scripts/textfooler
+mkdir -p ../../logs ../../results/textfooler
+
+# 逐模型跑
+nohup bash run_textfooler_finma.sh    > ../../logs/textfooler_finma.log 2>&1 &
+nohup bash run_textfooler_xuanyuan.sh > ../../logs/textfooler_xuanyuan.log 2>&1 &
+nohup bash run_textfooler_fingpt.sh   > ../../logs/textfooler_fingpt.log 2>&1 &
+nohup bash run_textfooler_finr1.sh    > ../../logs/textfooler_finr1.log 2>&1 &
+
+# 或一键全跑（按顺序）
+nohup bash run_textfooler_all.sh > ../../logs/textfooler_all.log 2>&1 &
+```
+
+TextFooler 同样需要双卡（attacker on cuda:0 用于生成初始 suffix, target on cuda:1 用于重要性评分和贪心搜索）。结果输出到 `results/textfooler/`。
 
 ### 4. Build Attack Pools (Optional) -- 因为可攻击样本池已经在代码里了，所以不用执行这步
 
