@@ -29,10 +29,16 @@ FinancialAdversarialAttack/
 │       ├── fingpt/             # FinGPT attack pools
 │       ├── xuanyuan/           # XuanYuan-6B attack pools
 │       └── finr1/              # Fin-R1 attack pools
+├── autodan/                    # AutoDAN baseline (GA + HGA)
+│   ├── attack.py               # Main AutoDAN attack script
+│   ├── ga_utils.py             # Fitness function + GA/HGA operators
+│   ├── suffix_manager.py       # Prompt construction + token slicing
+│   └── initial_pool.py         # LLM-based initial population
 ├── scripts/
 │   ├── download/               # Model download scripts
 │   ├── attack/                 # Attack experiment scripts
-│   └── random/                 # Random baseline scripts
+│   ├── random/                 # Random baseline scripts
+│   └── autodan/                # AutoDAN baseline scripts
 ├── logs/                       # Experiment logs (gitignored)
 ├── results/                    # Experiment results (gitignored)
 ├── financial_attack_main_classification.py   # Main attack script
@@ -66,7 +72,7 @@ cd scripts/download
 bash download_finma.sh # finma跑完了不用下
 bash download_fingpt.sh # fingpt跑完了不用下
 bash download_xuanyuan.sh  # 下这个
-bash download_finr1.sh
+bash download_finr1.sh # 下这个
 
 # Download attack model
 bash download_llama31_attack.sh # 下这个
@@ -97,6 +103,31 @@ nohup bash run_random_xuanyuan.sh > ../../logs/random_xuanyuan.log 2>&1 &
 # 跑finr1 random实验 -- 0208
 nohup bash run_random_finr1.sh > ../../logs/random_finr1.log 2>&1 &
 ```
+
+**Option C: AutoDAN Baseline (GA + HGA)**
+
+额外依赖（在 finattack 环境中安装）：
+```bash
+pip install nltk
+python -c "import nltk; nltk.download('stopwords'); nltk.download('punkt'); nltk.download('wordnet'); nltk.download('punkt_tab')"
+```
+
+跑全部模型（每个模型 6 tasks × 2 variants = 12 组，4 模型共 48 组）：
+```bash
+cd scripts/autodan
+mkdir -p ../../logs ../../results/autodan
+
+# 逐模型跑（每个模型大约需要几小时，可并行在不同机器上）
+nohup bash run_autodan_finma.sh    > ../../logs/autodan_finma.log 2>&1 &
+nohup bash run_autodan_xuanyuan.sh > ../../logs/autodan_xuanyuan.log 2>&1 &
+nohup bash run_autodan_fingpt.sh   > ../../logs/autodan_fingpt.log 2>&1 &
+nohup bash run_autodan_finr1.sh    > ../../logs/autodan_finr1.log 2>&1 &
+
+# 或一键全跑（按顺序）
+nohup bash run_autodan_all.sh > ../../logs/autodan_all.log 2>&1 &
+```
+
+AutoDAN 同样需要双卡（attacker on cuda:0, target on cuda:1），参数已在脚本中配好：Pop=20, Gen=12, suffix≤30 tokens。结果输出到 `results/autodan/`。
 
 ### 4. Build Attack Pools (Optional) -- 因为可攻击样本池已经在代码里了，所以不用执行这步
 
