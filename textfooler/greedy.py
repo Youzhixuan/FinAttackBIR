@@ -452,7 +452,7 @@ def generate_response(
 
     with torch.no_grad():
         output_ids = model.generate(
-            gen_input,
+            input_ids=gen_input,
             attention_mask=attn_mask,
             max_new_tokens=max_new_tokens,
             do_sample=False,
