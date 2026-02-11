@@ -184,11 +184,25 @@ def load_attack_pool(args) -> List[Dict]:
             if line:
                 samples.append(json.loads(line))
 
-    samples = samples[args.start:]
-    if args.n_samples > 0:
-        samples = samples[:args.n_samples]
+    if not samples:
+        print(f"  [WARN] Attack pool is empty: {pool_path} (0 valid samples). Skipping this task.")
+        return []
 
-    print(f"  Loaded {len(samples)} samples from {pool_path}")
+    samples = samples[args.start:]
+
+    # Random sampling with fixed seed (aligned with BIR main attack for fair comparison)
+    if args.n_samples > 0 and args.n_samples < len(samples):
+        import random as _rand
+        total_before = len(samples)
+        _rand.seed(args.seed)
+        samples = _rand.sample(samples, args.n_samples)
+        print(f"  Loaded {len(samples)} samples from {pool_path} "
+              f"(randomly sampled from {total_before} with seed={args.seed})")
+    else:
+        if args.n_samples > 0:
+            samples = samples[:args.n_samples]
+        print(f"  Loaded {len(samples)} samples from {pool_path}")
+
     return samples
 
 
@@ -292,9 +306,12 @@ def attack_single_sample(
     choices = sample.get("choices", [])
     answer_map = sample.get("answer_map", None)
 
+    # Fallback: get choices and answer_map from task config if missing in pool
+    from task_prompts import get_task_config
+    task_config = get_task_config(args.task)
+    if not choices:
+        choices = task_config.get("choices", [])
     if not answer_map:
-        from task_prompts import get_task_config
-        task_config = get_task_config(args.task)
         answer_map = task_config.get("answer_map", None)
 
     target_label = get_target_label(gold_label, choices)
@@ -514,6 +531,10 @@ def main():
     print("\nLoading attack pool...")
     samples = load_attack_pool(args)
 
+    if len(samples) == 0:
+        print(f"[WARN] No samples to attack for {args.target_model}/{args.task}. Skipping.")
+        return
+
     # Loss criterion
     crit = nn.CrossEntropyLoss(reduction="mean")
 
@@ -593,7 +614,8 @@ def main():
     print("\n" + "=" * 70)
     print(f"FINAL RESULTS: TextFooler on {args.target_model}/{args.task}")
     print(f"  Samples: {len(samples)}")
-    print(f"  ASR: {n_success}/{len(samples)} = {n_success / len(samples) * 100:.1f}%")
+    asr_pct = n_success / len(samples) * 100 if len(samples) > 0 else 0
+    print(f"  ASR: {n_success}/{len(samples)} = {asr_pct:.1f}%")
     print(f"  Avg suffix PPL: {avg_ppl:.1f}")
     print(f"  Total time: {total_time:.1f}s")
     print(f"  Avg time/sample: {total_time / max(len(samples), 1):.1f}s")
