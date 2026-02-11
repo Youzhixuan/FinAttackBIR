@@ -211,6 +211,7 @@ def load_attack_pool(args) -> List[Dict]:
             if line:
                 samples.append(json.loads(line))
 
+    # 2026-02-11 - Fixed: check for empty pool
     if not samples:
         print(f"  [WARN] Attack pool is empty: {pool_path} (0 valid samples). Skipping this task.")
         return []
@@ -267,7 +268,7 @@ def attack_single_sample(
     choices = sample.get("choices", [])
     answer_map = sample.get("answer_map", None)
 
-    # Fallback: get choices and answer_map from task config if missing in pool
+    # Fallback: get choices and answer_map from task config if missing in pool 2026-02-11
     from task_prompts import get_task_config
     task_config = get_task_config(args.task)
     if not choices:
@@ -506,6 +507,7 @@ def main():
     n_success = 0
     total_time = 0
 
+    # 2026-02-11 - Fixed: check for empty pool
     if len(samples) == 0:
         print(f"\n[WARN] No samples to attack for {args.target_model}/{args.task}. Skipping.")
         print("=" * 70)
