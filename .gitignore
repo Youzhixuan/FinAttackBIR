@@ -63,3 +63,6 @@ FinTrust-main/
 Thumbs.db
 
 *.bak
+
+# 其他
+test_fingpt_all_tasks.py
