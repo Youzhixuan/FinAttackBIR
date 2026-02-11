@@ -6,7 +6,10 @@
 set -e
 cd "$(dirname "$0")/../.."
 
+N_SAMPLES=300
+
 COMMON_PARAMS="--attack-model ../models/Llama-3.1-8B \
+  --n-samples $N_SAMPLES \
   --num-steps 12 \
   --batch-size 20 \
   --max-suffix-tokens 30 \
@@ -16,7 +19,7 @@ COMMON_PARAMS="--attack-model ../models/Llama-3.1-8B \
   --attacker-device cuda:0 \
   --target-device cuda:1"
 
-TASKS="flare_fpb flare_fiqasa flare_ma flare_cra_polish flare_headlines"
+TASKS="flare_fpb flare_fiqasa flare_ma flare_cra_polish flare_headlines fintrust_fairness"
 
 for TASK in $TASKS; do
   echo "========== AutoDAN-GA: fingpt / ${TASK} =========="

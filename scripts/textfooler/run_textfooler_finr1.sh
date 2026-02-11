@@ -6,7 +6,10 @@
 set -e
 cd "$(dirname "$0")/../.."
 
+N_SAMPLES=300
+
 COMMON_PARAMS="--attack-model ../models/Llama-3.1-8B \
+  --n-samples $N_SAMPLES \
   --max-suffix-tokens 30 \
   --candidates-per-pos 7 \
   --attacker-device cuda:0 \

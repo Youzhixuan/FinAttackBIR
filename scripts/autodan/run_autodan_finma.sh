@@ -6,7 +6,10 @@
 set -e
 cd "$(dirname "$0")/../.."
 
+N_SAMPLES=300
+
 COMMON_PARAMS="--attack-model ../models/Llama-3.1-8B \
+  --n-samples $N_SAMPLES \
   --num-steps 12 \
   --batch-size 20 \
   --max-suffix-tokens 30 \
@@ -18,6 +21,7 @@ COMMON_PARAMS="--attack-model ../models/Llama-3.1-8B \
 
 # --- Single GPU mode (uncomment if only 1 GPU available) ---
 # COMMON_PARAMS="--attack-model ../models/Llama-3.1-8B \
+#   --n-samples $N_SAMPLES \
 #   --num-steps 12 \
 #   --batch-size 20 \
 #   --max-suffix-tokens 30 \
