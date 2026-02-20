@@ -37,12 +37,18 @@ FinancialAdversarialAttack/
 ├── textfooler/                 # TextFooler baseline (greedy importance-based)
 │   ├── attack.py               # Main TextFooler attack script
 │   └── greedy.py               # Importance scoring + greedy replacement
+├── momentum_gcg/               # Momentum-GCG baseline (white-box gradient-based)
+│   ├── attack.py               # Main Momentum-GCG attack script
+│   ├── opt_utils.py            # GCG optimization utilities
+│   ├── llm_attacks_utils.py    # Local vendor for llm-attacks functions
+│   └── config.py               # Original GCG config (TEST_PREFIXES)
 ├── scripts/
 │   ├── download/               # Model download scripts
 │   ├── attack/                 # Attack experiment scripts
 │   ├── random/                 # Random baseline scripts
 │   ├── autodan/                # AutoDAN baseline scripts
-│   └── textfooler/             # TextFooler baseline scripts
+│   ├── textfooler/             # TextFooler baseline scripts
+│   └── momentum_gcg/           # Momentum-GCG baseline scripts
 ├── logs/                       # Experiment logs (gitignored)
 ├── results/                    # Experiment results (gitignored)
 ├── financial_attack_main_classification.py   # Main attack script
@@ -152,6 +158,33 @@ nohup bash run_textfooler_all.sh > ../../logs/textfooler_all.log 2>&1 &
 ```
 
 TextFooler 同样需要双卡（attacker on cuda:0 用于生成初始 suffix, target on cuda:1 用于重要性评分和贪心搜索）。结果输出到 `results/textfooler/`。
+
+**Option E: Momentum-GCG Baseline (White-box Gradient-Based)**
+
+白盒梯度攻击 baseline，基于 [Boosting Jailbreak Attack with Momentum](https://openreview.net/pdf?id=WCar0kfHCF) (ICLR 2024 Workshop / ICASSP 2025)，改造为分类标签翻转攻击。只需**单卡**（无 attacker model，直接在 target model 上算梯度）。
+
+额外依赖（在 pair_final 环境中安装）：
+```bash
+pip install ml_collections
+```
+
+> **注意**：原始代码依赖 `llm-attacks` 包（pin transformers==4.28.1），与我们环境不兼容。已本地实现所需工具函数于 `momentum_gcg/llm_attacks_utils.py`，无需安装 `llm-attacks`。
+
+```bash
+cd scripts/momentum_gcg
+mkdir -p ../../logs ../../results/momentum_gcg
+
+# 逐模型跑（H200 80GB 推荐，各模型 batch 参数已在脚本中配好）
+nohup bash run_momentum_gcg_finma.sh    > ../../logs/momentum_gcg_finma.log 2>&1 &
+nohup bash run_momentum_gcg_xuanyuan.sh > ../../logs/momentum_gcg_xuanyuan.log 2>&1 &
+nohup bash run_momentum_gcg_fingpt.sh   > ../../logs/momentum_gcg_fingpt.log 2>&1 &
+nohup bash run_momentum_gcg_finr1.sh    > ../../logs/momentum_gcg_finr1.log 2>&1 &
+
+# 或一键全跑（按顺序，约 18 小时）
+nohup bash run_momentum_gcg_all.sh > ../../logs/momentum_gcg_all.log 2>&1 &
+```
+
+Momentum-GCG 只需**单卡**即可运行。脚本中 batch 参数已针对 H200 80GB 优化（详见各脚本注释）。如在较小显存 GPU 上运行，按脚本注释缩减 `--batch-size` 和 `--fwd-batch-size`。结果输出到 `results/momentum_gcg/`。
 
 ### 4. Build Attack Pools (Optional) -- 因为可攻击样本池已经在代码里了，所以不用执行这步
 
