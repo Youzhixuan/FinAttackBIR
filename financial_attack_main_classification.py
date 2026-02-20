@@ -959,6 +959,13 @@ def attack_all_samples(samples: List[Dict], args: Args, output_file: str, task_n
     print("  [3/3] Loading Judge (ClassificationJudge)...")
     judgeLM = ClassificationJudge(args)
     
+    # 2026-02-12 - Enable prefer_last for chain-of-thought models (Fin-R1)
+    # Fin-R1 often starts with a wrong label then self-corrects in reasoning.
+    # prefer_last extracts the LAST occurring label as the model's final answer.
+    if args.target_model == "finr1":
+        judgeLM.set_prefer_last(True)
+        print("  [INFO] Judge: prefer_last=True enabled for Fin-R1 (CoT model)")
+    
     # 2026-02-07 - Multi-GPU mode: pin models to specified devices, disable offloading
     if getattr(args, 'no_offload', False):
         attacker_dev = getattr(args, 'attacker_device', 'cuda:0')

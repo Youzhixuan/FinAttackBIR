@@ -67,6 +67,11 @@ def run_fair_random_baseline():
         goal = "misclassify financial text"
         target_str = ""
     judgeLM = ClassificationJudge(DummyArgs())
+    
+    # 2026-02-12 - Enable prefer_last for chain-of-thought models (Fin-R1)
+    if cmd_args.target_model == "finr1":
+        judgeLM.set_prefer_last(True)
+        print("  [INFO] Judge: prefer_last=True enabled for Fin-R1 (CoT model)")
 
     # 6. 加载数据
     samples = load_attack_samples(cmd_args.task, cmd_args.n_samples, target_model=cmd_args.target_model)

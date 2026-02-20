@@ -486,6 +486,10 @@ def main():
         goal = ""
         target_str = ""
     judge = ClassificationJudge(JudgeArgs())
+    # 2026-02-12 - Enable prefer_last for chain-of-thought models (Fin-R1)
+    if args.target_model == "finr1":
+        judge.set_prefer_last(True)
+        print("  [INFO] Judge: prefer_last=True enabled for Fin-R1 (CoT model)")
     print("  Judge loaded")
 
     # --- Load data ---
