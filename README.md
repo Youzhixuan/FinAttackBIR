@@ -186,6 +186,55 @@ nohup bash run_momentum_gcg_all.sh > ../../logs/momentum_gcg_all.log 2>&1 &
 
 Momentum-GCG 只需**单卡**即可运行。脚本中 batch 参数已针对 H200 80GB 优化（详见各脚本注释）。如在较小显存 GPU 上运行，按脚本注释缩减 `--batch-size` 和 `--fwd-batch-size`。结果输出到 `results/momentum_gcg/`。
 
+**Option F: FinTrust Personal-Level Fairness 补充实验**
+
+针对 `fintrust_fairness`（FinTrust personal-level fairness）任务的补充实验，共 3 个实验：
+
+| # | 方法 | Target Model | 任务 | 脚本 |
+|---|------|-------------|------|------|
+| 1 | Random Baseline | FinMA-7B | fintrust_fairness | `scripts/random/run_random_finma_personal.sh` |
+| 2 | Random Baseline | FinGPT | fintrust_fairness | `scripts/random/run_random_fingpt_personal.sh` |
+| 3 | Ours (BIR) | FinGPT | fintrust_fairness | `scripts/attack/run_attack_fingpt_personal.sh` |
+
+**运行方式（H200）：**
+
+```bash
+cd scripts/random
+mkdir -p ../../logs
+
+# 实验 1: Random Baseline + FinMA（单卡，约 2-3 小时），结果输出到 result/random_baseline/
+nohup bash run_random_finma_personal.sh > ../../logs/random_finma_personal.log 2>&1 &
+
+# 实验 2: Random Baseline + FinGPT（单卡，约 3-4 小时），结果输出到 result/random_baseline/
+nohup bash run_random_fingpt_personal.sh > ../../logs/random_fingpt_personal.log 2>&1 &
+
+# 实验 3: Ours BIR Attack + FinGPT（双卡: attacker cuda:0, target cuda:1，约 8-12 小时），结果输出到 result/
+cd ../attack
+nohup bash run_attack_fingpt_personal.sh > ../../logs/attack_fingpt_personal.log 2>&1 &
+```
+
+> **注意**：
+> - Random Baseline 只需**单卡**（仅加载 target model，无 attacker model），两个实验需顺序执行（不同 target model）。
+> - BIR Attack 需要**双卡**（默认 `--no-offload --attacker-device cuda:0 --target-device cuda:1`）。
+
+**H200 显存优化（可选，用显存换速度）：**
+
+H200 80GB 显存充裕，以下两处参数默认值偏保守，可直接改大以提速，不影响实验结果：
+
+1. **Random Baseline 推理 batch size**：`random_baseline_classification.py` 第 34 行
+   ```python
+   BATCH_SIZE = 20  # 改为 120（总预算 240 不变，forward pass 从 12 次降到 2 次，约 3x 加速）
+   ```
+2. **BIR Attack 中 FinGPT 的 OOM 保护阈值**：`conversers.py` 第 1078-1085 行
+   ```python
+   # 原始值（小显存卡设计，20 条 prompt 会被拆成 5 个 sub-batch）：
+   if max_len > 1500:
+       effective_batch_size = 4    # 最大可改为 40
+   elif max_len > 1000:
+       effective_batch_size = 8    # 最大可上改为 40
+   # 改大后 20 条 prompt 一次推完，省去 4 次额外 forward pass
+   ```
+
 ### 4. Build Attack Pools (Optional) -- 因为可攻击样本池已经在代码里了，所以不用执行这步
 
 If you need to build attack pools for a new model:

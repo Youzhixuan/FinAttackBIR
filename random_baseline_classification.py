@@ -57,6 +57,7 @@ def run_fair_random_baseline():
     print("[INFO] Pinning model to GPU for Random Baseline speedup...")
     targetLM.gpu_device = "cuda:0" if torch.cuda.is_available() else "cpu"
     targetLM.model = targetLM.model.to(targetLM.gpu_device)
+    targetLM._skip_offload = True
 
     # 5. 初始化 Judge
     # 修正：补充缺失的 judge_max_n_tokens 和 judge_temperature
