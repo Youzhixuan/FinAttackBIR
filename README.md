@@ -201,13 +201,13 @@ Momentum-GCG 只需**单卡**即可运行。脚本中 batch 参数已针对 H200
 ```bash
 cd scripts/random
 
-# 实验 1: Random Baseline + FinMA（单卡，约 2-3 小时），结果输出到 result/random_baseline/
+# 实验 1: Random Baseline + FinMA（单卡），结果输出到 result/random_baseline/
 nohup bash run_random_finma_personal.sh > ../../logs/random_finma_personal.log 2>&1 &
 
-# 实验 2: Random Baseline + FinGPT（单卡，约 3-4 小时），结果输出到 result/random_baseline/
+# 实验 2: Random Baseline + FinGPT（单卡），结果输出到 result/random_baseline/
 nohup bash run_random_fingpt_personal.sh > ../../logs/random_fingpt_personal.log 2>&1 &
 
-# 实验 3: Ours BIR Attack + FinGPT（双卡: attacker cuda:0, target cuda:1，约 8-12 小时），结果输出到 result/
+# 实验 3: Ours BIR Attack + FinGPT（双卡: attacker cuda:0, target cuda:1），结果输出到 result/
 cd ../attack
 nohup bash run_attack_fingpt_personal.sh > ../../logs/attack_fingpt_personal.log 2>&1 &
 ```
