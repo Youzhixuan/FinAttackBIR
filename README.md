@@ -200,7 +200,6 @@ Momentum-GCG 只需**单卡**即可运行。脚本中 batch 参数已针对 H200
 
 ```bash
 cd scripts/random
-mkdir -p ../../logs
 
 # 实验 1: Random Baseline + FinMA（单卡，约 2-3 小时），结果输出到 result/random_baseline/
 nohup bash run_random_finma_personal.sh > ../../logs/random_finma_personal.log 2>&1 &
