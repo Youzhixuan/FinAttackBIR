@@ -254,6 +254,25 @@ nohup bash run_amplegcg_attack_finr1_160.sh    > ../../logs/amplegcg_attack_finr
 
 若要顺序一键全跑，可直接执行：`bash scripts/amplegcg/run_amplegcg_all_160.sh`。
 
+**H200 显存优化（可选，用显存换速度）：**
+
+H200 80GB 显存充裕时，AmpleGCG 主要有两处可直接调大来缩短时间，不影响实验设定（`num_suffixes=160` 与 `max_new_tokens=30` 保持不变）：
+
+1. **Suffix 生成 batch size**：`scripts/amplegcg/run_amplegcg_generate_160_all.sh`
+   ```bash
+   GENERATE_BATCH_SIZE=160
+   ```
+   160是拉满了。含义是一次 `prompter_model.generate()` 返回多少个 suffix。原理上越大越快。如果OOM就调低。
+
+2. **攻击阶段 suffix 测试 batch size**：各个 `scripts/amplegcg/run_amplegcg_attack_*_160.sh`
+   ```bash
+   # 当前 H200 推荐起点
+   FinMA / XuanYuan: ATTACK_BATCH_SIZE=32
+   FinGPT:           ATTACK_BATCH_SIZE=16
+   Fin-R1:           ATTACK_BATCH_SIZE=24
+   ```
+   含义是每次 target model forward 同时测试多少个 suffix。该值越大，完成越快；如果 H200 上仍稳定，可继续逐步上调；若出现 OOM，就把对应脚本中的 batch size 往回调一档。
+
 ### 4. Build Attack Pools (Optional) -- 因为可攻击样本池已经在代码里了，所以不用执行这步
 
 If you need to build attack pools for a new model:

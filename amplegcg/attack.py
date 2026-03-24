@@ -145,6 +145,7 @@ def test_suffixes(
     sample: Dict,
     judge,
     task: str,
+    attack_batch_size: int,
 ) -> Dict:
     """
     Test suffixes and determine if attack is successful
@@ -162,7 +163,7 @@ def test_suffixes(
     best_response = ""
     all_results = []
 
-    batch_size = 8
+    batch_size = attack_batch_size
     for i in range(0, len(suffixes), batch_size):
         batch_suffixes = suffixes[i : i + batch_size]
         batch_prompts = [f"{source_input} {s}" for s in batch_suffixes]
@@ -260,6 +261,13 @@ def get_args():
         type=str,
         default="./results/amplegcg",
         help="Output directory for results",
+    )
+
+    parser.add_argument(
+        "--attack-batch-size",
+        type=int,
+        default=8,
+        help="Number of suffixes tested per target-model forward pass",
     )
 
     parser.add_argument(
@@ -496,6 +504,7 @@ def main():
                 sample=sample,
                 judge=judge,
                 task=args.task,
+                attack_batch_size=args.attack_batch_size,
             )
 
             results.append(
@@ -524,6 +533,7 @@ def main():
                     "target_model": args.target_model,
                     "task": args.task,
                     "num_suffixes": args.num_suffixes,
+                    "attack_batch_size": args.attack_batch_size,
                     "seed": args.seed,
                 },
                 "summary": {

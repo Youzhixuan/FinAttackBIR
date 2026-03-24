@@ -9,7 +9,7 @@ source /root/miniconda3/etc/profile.d/conda.sh
 conda activate pair_final
 
 NUM_SUFFIXES=160
-GENERATE_BATCH_SIZE=60
+GENERATE_BATCH_SIZE=160
 N_SAMPLES=0
 PROMPTER_MODEL="../models/AmpleGCG"
 SUFFIX_DIR="./results/amplegcg_160"

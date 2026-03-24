@@ -10,6 +10,7 @@ conda activate pair_final
 
 TARGET_MODEL="fingpt"
 NUM_SUFFIXES=160
+ATTACK_BATCH_SIZE=16
 SUFFIX_DIR="./results/amplegcg_160"
 OUTPUT_DIR="./results/amplegcg"
 LOG_DIR="./logs/amplegcg_160"
@@ -48,6 +49,7 @@ for ITEM in "${TASKS[@]}"; do
         --task "$TASK" \
         --n-samples "$N_SAMPLES" \
         --num-suffixes "$NUM_SUFFIXES" \
+        --attack-batch-size "$ATTACK_BATCH_SIZE" \
         --suffix-dir "$SUFFIX_DIR" \
         --output-dir "$OUTPUT_DIR" \
         2>&1 | tee "$LOG_DIR/${TARGET_MODEL}_${TASK}.log"
