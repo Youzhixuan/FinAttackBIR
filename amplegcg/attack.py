@@ -487,6 +487,9 @@ def main():
             goal = ""
             target_str = ""
         judge = ClassificationJudge(JudgeArgs())
+        if args.target_model == "finr1":
+            judge.set_prefer_last(True)
+            print("  [INFO] Judge: prefer_last=True enabled for Fin-R1 (CoT model)")
 
         results = []
         success_count = 0
