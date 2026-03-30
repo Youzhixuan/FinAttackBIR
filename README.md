@@ -303,7 +303,6 @@ nohup bash run_random_160_xuanyuan_fintrust.sh  > ../../logs/random_160_xuanyuan
 cd scripts/random
 mkdir -p ../../logs ../../result/random_baseline_80
 
-nohup bash run_random_80_finr1_fiqasa.sh       > ../../logs/random_80_finr1_fiqasa.log 2>&1 &
 nohup bash run_random_80_xuanyuan_headlines.sh  > ../../logs/random_80_xuanyuan_headlines.log 2>&1 &
 ```
 
