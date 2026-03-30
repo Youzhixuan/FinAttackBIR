@@ -297,6 +297,18 @@ nohup bash run_random_160_xuanyuan_fintrust.sh  > ../../logs/random_160_xuanyuan
 
 结果输出到 `result/random_baseline_160/`。单卡单组约 15～30 分钟。
 
+**Option I: Random Baseline 80（低预算）**
+
+```bash
+cd scripts/random
+mkdir -p ../../logs ../../result/random_baseline_80
+
+nohup bash run_random_80_finr1_fiqasa.sh       > ../../logs/random_80_finr1_fiqasa.log 2>&1 &
+nohup bash run_random_80_xuanyuan_headlines.sh  > ../../logs/random_80_xuanyuan_headlines.log 2>&1 &
+```
+
+结果输出到 `result/random_baseline_80/`。
+
 ### 4. Build Attack Pools (Optional) -- 因为可攻击样本池已经在代码里了，所以不用执行这步
 
 If you need to build attack pools for a new model:

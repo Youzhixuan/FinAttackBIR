@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import random
+import time
 import torch
 from tqdm import tqdm
 from transformers import AutoTokenizer
@@ -26,13 +27,15 @@ def run_fair_random_baseline():
     parser.add_argument('--target-model', type=str, default='finma',
                         choices=['finma', 'fingpt', 'xuanyuan', 'finr1'],
                         help='Target model: finma, fingpt, xuanyuan, finr1')
+    # 2026-03-11 - Configurable budget
+    parser.add_argument('--budget', type=int, default=80,
+                        help='Total query budget per sample (default: 80)')
     cmd_args = parser.parse_args()
 
-    # 1. 设置查询预算 (对齐主实验：3 blocks * 4 iterations * 20 streams = 240)
-    # Modified: 2026-02-01 - Aligned with actual attack budget (3 blocks, not 6)
-    TOTAL_BUDGET = 240 
+    # 1. 设置查询预算
+    TOTAL_BUDGET = cmd_args.budget
     BATCH_SIZE = 20  # 模拟主实验的 n_streams
-    NUM_BATCHES = TOTAL_BUDGET // BATCH_SIZE # 12 次批量请求
+    NUM_BATCHES = TOTAL_BUDGET // BATCH_SIZE
 
     # 2. 加载符号词表与分词器
     vocab_data = load_symbol_vocab('symbol_vocab.json')
@@ -99,6 +102,7 @@ def run_fair_random_baseline():
         final_response = ""
         final_suffix = ""
         total_queries_used = 0
+        sample_start = time.time()
 
         # --- 公平预算循环 (批量测试) ---
         for b in range(NUM_BATCHES):
@@ -127,10 +131,12 @@ def run_fair_random_baseline():
             success_count += 1
             print(f"   [SUCCESS] Sample {idx} misled at query {total_queries_used}!")
         
+        sample_time = time.time() - sample_start
         results.append({
             'sample_id': sample.get('index', idx),
             'success': is_success,
             'queries_used': total_queries_used,
+            'time_seconds': round(sample_time, 2),
             'final_suffix': final_suffix if is_success else "N/A",
             'prediction': final_response if is_success else "STILL_CORRECT"
         })
